@@ -1,0 +1,7 @@
+debug: true
+name: "guldan"
+logformat: './log.xml'
+listen: '0.0.0.0:8383'
+database:
+  engine: 'mysql'
+  connectionstring: 'root:288957@tcp(127.0.0.1:3306)/guldandb?charset=utf8mb4&parseTime=true&loc=Local'
