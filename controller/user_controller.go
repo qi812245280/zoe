@@ -3,9 +3,9 @@ package controller
 import (
 	"fmt"
 	"github.com/cihub/seelog"
-	"http_guldan_server/model"
-	"http_guldan_server/mw"
 	"strings"
+	"zoe/model"
+	"zoe/mw"
 )
 
 type UserControllerEngine struct {

@@ -4,15 +4,16 @@ import (
 	"flag"
 	"fmt"
 	log "github.com/cihub/seelog"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
-	"http_guldan_server/config"
-	"http_guldan_server/controller"
-	"http_guldan_server/mw"
-	org "http_guldan_server/router/org"
-	"http_guldan_server/router/project"
 	"net/http"
 	"os"
 	"time"
+	"zoe/config"
+	"zoe/controller"
+	"zoe/mw"
+	org "zoe/router/org"
+	"zoe/router/project"
 )
 
 var (
@@ -45,7 +46,8 @@ func applyRoute(r *gin.Engine) {
 	v1.POST("/org/:org_id/authorize", org.AuthorizeOrgHandler)
 	v1.DELETE("/org/:org_id/authorize/:user_id", org.DeleteAuthorizeOrgHandler)
 
-	v1.POST("/project", project.CreateProjectHandler)
+	v1.PUT("/project", project.CreateProjectHandler)
+	v1.POST("/project/:project_id", project.UpdateProjectHandler)
 }
 
 func guldanAccessLogger() gin.HandlerFunc {
@@ -119,6 +121,7 @@ func main() {
 	r := gin.New()
 	r.Use(guldanAccessLogger())
 	r.Use(gin.Recovery())
+	pprof.Register(r) // 性能
 
 	applyRoute(r)
 
@@ -126,5 +129,4 @@ func main() {
 	if err := r.Run(config.C.Listen); err != nil {
 		_ = log.Errorf("http listen fail: %v", err)
 	}
-
 }

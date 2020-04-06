@@ -3,8 +3,8 @@ package controller
 import (
 	"errors"
 	"github.com/cihub/seelog"
-	"http_guldan_server/model"
-	"http_guldan_server/mw"
+	"zoe/model"
+	"zoe/mw"
 )
 
 type ProjectControllerEngine struct {
@@ -97,4 +97,19 @@ func (this *ProjectControllerEngine) CreateProject(name, private string, parentI
 		return nil, err
 	}
 	return project, nil
+}
+
+func (this *ProjectControllerEngine) UpdateProject(projectId int, private string) error {
+	var visibility int
+	if private == "true" {
+		visibility = 0
+	} else if private == "false" {
+		visibility = 1
+	}
+	sql := "update project set visibility = ? where id = ? and is_deleted = 0"
+	_, err := mw.DB.Exec(sql, visibility, projectId)
+	if err != nil {
+		return err
+	}
+	return nil
 }

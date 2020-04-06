@@ -3,15 +3,20 @@ package project
 import (
 	"github.com/cihub/seelog"
 	"github.com/gin-gonic/gin"
-	"http_guldan_server/basic"
-	"http_guldan_server/controller"
-	"http_guldan_server/utils"
 	"net/http"
+	"strconv"
+	"zoe/basic"
+	"zoe/controller"
+	"zoe/utils"
 )
 
-type ProjectCreateRequest struct {
+type CreateProjectRequest struct {
 	ParentId int    `json:"parent_id" binding:"required"`
 	Name     string `json:"name" binding:"required"`
+	Private  string `json:"private"`
+}
+
+type UpdateProjectRequest struct {
 	Private  string `json:"private"`
 }
 
@@ -21,7 +26,7 @@ func CreateProjectHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "无效的用户"})
 		return
 	}
-	var req ProjectCreateRequest
+	var req CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "参数错误"})
@@ -64,5 +69,39 @@ func CreateProjectHandler(c *gin.Context) {
 			"parent_id": project.ParentId,
 			"private":   visibility,
 		},
+	})
+}
+
+func UpdateProjectHandler(c * gin.Context) {
+	user, err := utils.GetUser(c)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "无效的用户"})
+		return
+	}
+	var req UpdateProjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		_ = seelog.Critical(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "参数错误"})
+		return
+	}
+	projectId, _ := strconv.Atoi(c.Param("project_id"))
+	project, err := controller.ProjectController.GetProjectById(projectId)
+	if project == nil || err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "目标项目不存在"})
+		return
+	}
+	flag, err := controller.PrivilegeController.ValidateForUserModifyProject(user.UserHash, projectId, project.ParentId)
+	if err != nil || !flag{
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": "用户无权限修改项目"})
+		return
+	}
+	err = controller.ProjectController.UpdateProject(projectId, req.Private)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code": 0,
+		"msg":  "OK",
 	})
 }

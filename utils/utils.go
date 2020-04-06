@@ -2,8 +2,8 @@ package utils
 
 import (
 	"github.com/gin-gonic/gin"
-	"http_guldan_server/controller"
-	"http_guldan_server/model"
+	"zoe/controller"
+	"zoe/model"
 )
 
 func GetUser(c *gin.Context) (*model.User, error) {

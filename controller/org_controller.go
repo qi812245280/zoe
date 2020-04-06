@@ -3,8 +3,8 @@ package controller
 import (
 	"fmt"
 	"github.com/cihub/seelog"
-	"http_guldan_server/model"
-	"http_guldan_server/mw"
+	"zoe/model"
+	"zoe/mw"
 	"strings"
 )
 

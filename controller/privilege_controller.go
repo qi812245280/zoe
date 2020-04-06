@@ -2,9 +2,9 @@ package controller
 
 import (
 	"github.com/cihub/seelog"
-	"http_guldan_server/basic"
-	"http_guldan_server/model"
-	"http_guldan_server/mw"
+	"zoe/basic"
+	"zoe/model"
+	"zoe/mw"
 )
 
 type PrivilegeControllerEngine struct {
@@ -156,4 +156,25 @@ func (this *PrivilegeControllerEngine) ValidateUserForProjectCreation(userHash s
 		return false, err
 	}
 	return flag, nil
+}
+
+func (this *PrivilegeControllerEngine) ValidateForUserModifyProject(userHash string, projectId, orgId int) (bool, error) {
+	var privileges []model.Privilege
+	sql := "select * from privilege where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
+	err := mw.DB.Select(&privileges, sql, userHash, projectId, basic.Resource_Type_PROJECT)
+	if err != nil {
+		return false, err
+	}
+	if len(privileges) > 0 {
+		return true, nil
+	}
+	flag, err := this.ValidateForUserModifyOrg(userHash, orgId)
+	if err != nil {
+		return false, err
+	}
+	if flag {
+		return true, nil
+	} else {
+		return false, nil
+	}
 }

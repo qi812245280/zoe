@@ -3,12 +3,12 @@ package router
 import (
 	"github.com/cihub/seelog"
 	"github.com/gin-gonic/gin"
-	"http_guldan_server/basic"
-	"http_guldan_server/controller"
-	"http_guldan_server/model"
 	"net/http"
 	"strconv"
 	"strings"
+	"zoe/basic"
+	"zoe/controller"
+	"zoe/model"
 )
 
 type OrgCreateRequest struct {

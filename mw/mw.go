@@ -4,7 +4,7 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
-	"http_guldan_server/config"
+	"zoe/config"
 )
 
 var DB *sqlx.DB
