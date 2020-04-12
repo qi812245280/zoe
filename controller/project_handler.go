@@ -12,6 +12,7 @@ import (
 func CreateProjectHandler(c *gin.Context) {
 	userHash, err := c.Cookie("user_hash")
 	if err != nil {
+		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}

@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"github.com/cihub/seelog"
 	"github.com/gin-gonic/gin"
 	"strings"
 	"zoe/basic"
@@ -12,83 +11,126 @@ import (
 )
 
 func CreateOrg(userHash string, req model.OrgCreateRequest) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
+	user, err := utils.GetUser(conn, userHash)
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
 	if len(req.Name) >= basic.MAX_RESOURCE_NAME_LENGTH {
+		_ = conn.Rollback()
 		return nil, errors.New("组织名长度过长")
 	}
-	flag, err := db.IsExistingOrgByName(req.Name)
+	flag, err := db.IsExistingOrgByName(conn, req.Name)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	if flag {
 		return nil, errors.New("组织已经存在")
 	}
-	org, err := db.CreateOrg(req.Name, req.Private)
+	visibility := 0
+	if req.Private {
+		visibility = 1
+	}
+	id, err := db.CreateOrg(conn, req.Name, visibility)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
-	err = db.AddWithCheck(user.UserHash, org.Name, org.Id,
-		basic.Resource_Type_ORG, user.Id, basic.Privilege_Type_MODIFIER, org.Visibility)
+	err = db.AddWithCheck(conn, user.UserHash, req.Name, id,
+		basic.Resource_Type_ORG, user.Id, basic.Privilege_Type_MODIFIER, visibility)
 	if err != nil {
-		_ = seelog.Critical(err.Error())
+		_ = conn.Rollback()
 		return nil, err
 	}
-	var visibility string
-	if org.Visibility == 0 {
-		visibility = "private"
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	var visibilityStr string
+	if visibility == 0 {
+		visibilityStr = "private"
 	} else {
-		visibility = "public"
+		visibilityStr = "public"
 	}
 	return gin.H{
 		"code": 0,
 		"msg":  "OK",
 		"data": gin.H{
-			"id":         org.Id,
-			"name":       org.Name,
-			"visibility": visibility,
+			"id":         id,
+			"name":       req.Name,
+			"visibility": visibilityStr,
 		},
 	}, nil
 }
 
 func UpdateOrg(userHash string, orgId int, req model.OrgUpdateRequest) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	flag, err := db.IsExistingOrgById(orgId)
+	user, err := utils.GetUser(conn, userHash)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	flag, err := db.IsExistingOrgById(conn, orgId)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	if !flag {
 		return nil, errors.New("不存在的组织")
 	}
 
-	flag, err = db.ValidateForUserModifyOrg(user.UserHash, orgId)
+	flag, err = db.ValidateForUserModifyOrg(conn, user.UserHash, orgId)
 	if err != nil || !flag {
+		_ = conn.Rollback()
 		return nil, errors.New("用户无效权限修改该组织")
 	}
-	if err := db.UpdateOrg(orgId, req.Private); err != nil {
+	if err := db.UpdateOrg(conn, orgId, req.Private); err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	return gin.H{"code": 0, "msg": "OK"}, nil
 }
 
 func DeleteOrg(userHash string, orgId int) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	flag, err := db.ValidateForUserModifyOrg(user.UserHash, orgId)
-	if err != nil || !flag {
-		return nil, errors.New("用户无权限修改该组织")
-	}
-	if err = db.DeleteOrg(orgId); err != nil {
+	user, err := utils.GetUser(conn, userHash)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
-	if err = db.DeletePrivilege(orgId, basic.Resource_Type_ORG); err != nil {
+	flag, err := db.ValidateForUserModifyOrg(conn, user.UserHash, orgId)
+	if err != nil || !flag {
+		_ = conn.Rollback()
+		return nil, errors.New("用户无权限修改该组织")
+	}
+	if err = db.DeleteOrg(conn, orgId); err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	if err = db.DeletePrivilege(conn, orgId, basic.Resource_Type_ORG); err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	return gin.H{
@@ -98,22 +140,27 @@ func DeleteOrg(userHash string, orgId int) (gin.H, error) {
 }
 
 func ListOrg(userHash string) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	privileges, err := db.ListPrivilege(user.UserHash)
+	user, err := utils.GetUser(conn, userHash)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	privileges, err := db.ListPrivilege(conn, user.UserHash)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	orgNameList := make([]string, len(*privileges))
 	for index, privilege := range *privileges {
 		orgNameList[index] = strings.Split(privilege.ResourceName, ".")[0]
 	}
-	seelog.Info(orgNameList)
-	orgs, err := db.ListOrg(&orgNameList)
+	orgs, err := db.ListOrg(conn, &orgNameList)
 	if err != nil {
-		_ = seelog.Critical(err.Error())
+		_ = conn.Rollback()
 		return nil, err
 	}
 	data := make([]gin.H, len(*orgs))
@@ -128,41 +175,51 @@ func ListOrg(userHash string) (gin.H, error) {
 }
 
 func SingleOrg(userHash string, orgId int) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	flag, err := db.IsExistingOrgById(orgId)
+	user, err := utils.GetUser(conn, userHash)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	flag, err := db.IsExistingOrgById(conn, orgId)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	if !flag {
 		return nil, errors.New("不存在的组织")
 	}
-	org, err := db.QueryOrgById(orgId)
+	org, err := db.QueryOrgById(conn, orgId)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
-	flag, err = db.ValidateForUserModifyOrg(user.UserHash, orgId)
+	flag, err = db.ValidateForUserModifyOrg(conn, user.UserHash, orgId)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	if flag {
-		projects, err := db.ListAllProject(orgId)
+		projects, err := db.ListProjectByParentId(conn, orgId)
 		if err != nil {
-			_ = seelog.Critical(err.Error())
+			_ = conn.Rollback()
 			return nil, err
 		}
-		privileges, err := db.ListPrivilegeByResource(orgId, basic.Resource_Type_ORG)
+		privileges, err := db.ListPrivilegeByResource(conn, orgId, basic.Resource_Type_ORG)
 		if err != nil {
+			_ = conn.Rollback()
 			return nil, err
 		}
 		userIds := make([]int, len(*privileges))
 		for index, privilege := range *privileges {
 			userIds[index] = privilege.UserId
 		}
-		users, err := db.ListUserByIds(userIds)
+		users, err := db.ListUserByIds(conn, userIds)
 		if err != nil {
+			_ = conn.Rollback()
 			return nil, err
 		}
 		privilegeInfo := utils.GetPrivilegeUserInfo(privileges, users)
@@ -174,13 +231,15 @@ func SingleOrg(userHash string, orgId int) (gin.H, error) {
 			"data": orgInfo,
 		}, nil
 	} else {
-		flag, err = db.ValidateForUserViewOrg(user.UserHash, orgId)
+		flag, err = db.ValidateForUserViewOrg(conn, user.UserHash, orgId)
 		if err != nil {
+			_ = conn.Rollback()
 			return nil, err
 		}
 		if flag {
-			projects, err := db.ListAllProject(orgId)
+			projects, err := db.ListProjectByParentId(conn, orgId)
 			if err != nil {
+				_ = conn.Rollback()
 				return nil, err
 			}
 			projectInfo := utils.GetProjectInfo(projects)
@@ -191,12 +250,14 @@ func SingleOrg(userHash string, orgId int) (gin.H, error) {
 				"data": orgInfo,
 			}, nil
 		} else {
-			publicProjects, privateProject, err := db.ListProjectByVisibility(orgId)
+			publicProjects, privateProject, err := db.ListProjectByVisibility(conn, orgId)
 			if err != nil {
+				_ = conn.Rollback()
 				return nil, err
 			}
-			privileges, err := db.ListPrivilegeByPrefixResourceName(org.Name+".", user.UserHash)
+			privileges, err := db.ListPrivilegeByPrefixResourceName(conn, org.Name+".", user.UserHash)
 			if err != nil {
+				_ = conn.Rollback()
 				return nil, err
 			}
 			var projectNames []string
@@ -228,27 +289,37 @@ func SingleOrg(userHash string, orgId int) (gin.H, error) {
 }
 
 func AuthorizeOrg(userHash string, orgId int, req model.AuthorizeOrgRequest) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	flag, err := db.ValidateForUserModifyOrg(user.UserHash, orgId)
+	user, err := utils.GetUser(conn, userHash)
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	flag, err := db.ValidateForUserModifyOrg(conn, user.UserHash, orgId)
 	if err != nil || !flag {
+		_ = conn.Rollback()
 		return nil, errors.New("用户无权限修改该组织")
 	}
-	targetUser, err := db.GetUserByUserId(req.UserId)
+	targetUser, err := db.GetUserByUserId(conn, req.UserId)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, errors.New("目标用户不存在")
 	}
 	if targetUser.Id == user.Id {
+		_ = conn.Rollback()
 		return nil, errors.New("你不能为自己授权")
 	}
-	org, err := db.QueryOrgById(orgId)
+	org, err := db.QueryOrgById(conn, orgId)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, errors.New("不存在灯组织")
 	}
-	privilege, err := db.QueryPrivilegeByUserHash(targetUser.UserHash, orgId, basic.Resource_Type_ORG)
+	privilege, err := db.QueryPrivilegeByUserHash(conn, targetUser.UserHash, orgId, basic.Resource_Type_ORG)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	var priType int
@@ -262,11 +333,17 @@ func AuthorizeOrg(userHash string, orgId int, req model.AuthorizeOrgRequest) (gi
 		return nil, errors.New("非法的授权类型")
 	}
 	if privilege != nil {
-		err = db.UpdatePrivilegeByUserHash(targetUser.UserHash, priType, orgId, basic.Resource_Type_ORG)
+		err = db.UpdatePrivilegeByUserHash(conn, targetUser.UserHash, priType, orgId, basic.Resource_Type_ORG)
 	} else {
-		err = db.CreatePrivilege(targetUser.UserHash, org.Name, orgId, basic.Resource_Type_ORG, targetUser.Id, priType, org.Visibility)
+		err = db.CreatePrivilege(conn, targetUser.UserHash, org.Name, orgId, basic.Resource_Type_ORG, targetUser.Id, priType, org.Visibility)
 	}
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	// todo 删除拉取的缓存
@@ -275,24 +352,38 @@ func AuthorizeOrg(userHash string, orgId int, req model.AuthorizeOrgRequest) (gi
 }
 
 func DeleteAuthorizeOrg(userHash string, orgId, userId int) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	targetUser, err := db.GetUserByUserId(userId)
+	user, err := utils.GetUser(conn, userHash)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	targetUser, err := db.GetUserByUserId(conn, userId)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, errors.New("目标用户不存在")
 	}
-	flag, err := db.ValidateForUserModifyOrg(user.UserHash, orgId)
+	flag, err := db.ValidateForUserModifyOrg(conn, user.UserHash, orgId)
 	if err != nil || !flag {
+		_ = conn.Rollback()
 		return nil, errors.New("用户无权限修改该组织")
 	}
-	privilege, err := db.QueryPrivilegeByUserHash(targetUser.UserHash, orgId, basic.Resource_Type_ORG)
+	privilege, err := db.QueryPrivilegeByUserHash(conn, targetUser.UserHash, orgId, basic.Resource_Type_ORG)
 	if err != nil || privilege == nil {
+		_ = conn.Rollback()
 		return nil, errors.New("目标用户无该组织的权限")
 	}
-	err = db.DeletePrivilegeByUserHash(targetUser.UserHash, orgId, basic.Resource_Type_ORG)
+	err = db.DeletePrivilegeByUserHash(conn, targetUser.UserHash, orgId, basic.Resource_Type_ORG)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	return gin.H{"code": 0, "msg": "OK"}, nil

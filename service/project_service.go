@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"github.com/cihub/seelog"
 	"github.com/gin-gonic/gin"
 	"zoe/basic"
 	"zoe/dao/db"
@@ -11,61 +10,93 @@ import (
 )
 
 func CreateProject(userHash string, req model.CreateProjectRequest) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	org, err := db.QueryOrgById(req.ParentId)
+	user, err := utils.GetUser(conn, userHash)
 	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
-	flag, err := db.ValidateUserForProjectCreation(user.UserHash, req.ParentId)
+	org, err := db.QueryOrgById(conn, req.ParentId)
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	flag, err := db.ValidateUserForProjectCreation(conn, user.UserHash, req.ParentId)
 	if err != nil || !flag {
+		_ = conn.Rollback()
 		return nil, errors.New("用户无权限创建project")
 	}
-	project, err := db.CreateProject(org.Name+"."+req.Name, req.Private, req.ParentId)
-	if err != nil || project == nil {
+	var visibility int
+	if req.Private == "true" {
+		visibility = 0
+	} else if req.Private == "false" {
+		visibility = 1
+	}
+	id, err := db.CreateProject(conn, org.Name+"."+req.Name, visibility, req.ParentId)
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, errors.New("用户创建project失败")
 	}
-	err = db.AddWithCheck(user.UserHash, project.Name, project.Id,
-		basic.Resource_Type_PROJECT, user.Id, basic.Privilege_Type_MODIFIER, project.Visibility)
+	err = db.AddWithCheck(conn, user.UserHash, req.Name, id,
+		basic.Resource_Type_PROJECT, user.Id, basic.Privilege_Type_MODIFIER, visibility)
 	if err != nil {
-		_ = seelog.Critical(err.Error())
+		_ = conn.Rollback()
 		return nil, err
 	}
-	var visibility string
-	if project.Visibility == 0 {
-		visibility = "private"
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	var visibilityStr string
+	if visibility == 0 {
+		visibilityStr = "private"
 	} else {
-		visibility = "public"
+		visibilityStr = "public"
 	}
 	return gin.H{
 		"code": 0,
 		"msg":  "OK",
 		"data": gin.H{
-			"id":        project.Id,
-			"name":      project.Name,
-			"parent_id": project.ParentId,
-			"private":   visibility,
+			"id":        id,
+			"name":      req.Name,
+			"parent_id": req.ParentId,
+			"private":   visibilityStr,
 		},
 	}, nil
 }
 
 func UpdateProject(userHash string, projectId int, req model.UpdateProjectRequest) (gin.H, error) {
-	user, err := utils.GetUser(userHash)
+	conn, err := db.DB.Begin()
 	if err != nil {
 		return nil, err
 	}
-	project, err := db.GetProjectById(projectId)
+	user, err := utils.GetUser(conn, userHash)
+	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	project, err := db.GetProjectById(conn, projectId)
 	if project == nil || err != nil {
+		_ = conn.Rollback()
 		return nil, errors.New("目标项目不存在")
 	}
-	flag, err := db.ValidateForUserModifyProject(user.UserHash, projectId, project.ParentId)
+	flag, err := db.ValidateForUserModifyProject(conn, user.UserHash, projectId, project.ParentId)
 	if err != nil || !flag {
+		_ = conn.Rollback()
 		return nil, errors.New("用户无权限修改项目")
 	}
-	err = db.UpdateProject(projectId, req.Private)
+	err = db.UpdateProject(conn, projectId, req.Private)
 	if err != nil {
+		_ = conn.Rollback()
+		return nil, err
+	}
+	err = conn.Commit()
+	if err != nil {
+		_ = conn.Rollback()
 		return nil, err
 	}
 	return gin.H{

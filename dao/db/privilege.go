@@ -1,15 +1,34 @@
 package db
 
 import (
+	"database/sql"
 	"github.com/cihub/seelog"
 	"zoe/basic"
 	"zoe/model"
 )
 
-func IsExistingPrivilege(userHash, resName string, resId, resType, priType int) (bool, error) {
+func queryPrivilege(conn *sql.Tx, sql string, args ...interface{}) (*[]model.Privilege, error) {
+	var privileges []model.Privilege
+	rows, err := conn.Query(sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	var privilege model.Privilege
+	for rows.Next() {
+		err = rows.Scan(&privilege.Id, &privilege.ResourceId, &privilege.ResourceName, &privilege.ResourceType, &privilege.ResourceVisibility,
+			&privilege.UserId, &privilege.UserHash, &privilege.PrivilegeType, &privilege.IsDeleted, &privilege.UpdatedAt, &privilege.CreateAt)
+		if err != nil {
+			return nil, err
+		}
+		privileges = append(privileges, privilege)
+	}
+	return &privileges, nil
+}
+
+func IsExistingPrivilege(conn *sql.Tx, userHash, resName string, resId, resType, priType int) (bool, error) {
 	var privilege model.Privilege
 	sql := "select id from privilege where is_deleted = 0 and user_hash = ? and resource_name = ? and resource_id = ? and resource_type = ? and privilege_type = ?"
-	err := DB.QueryRow(sql, userHash, resName, resId, resType, priType).Scan(&privilege.Id)
+	err := conn.QueryRow(sql, userHash, resName, resId, resType, priType).Scan(&privilege.Id)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return false, nil
@@ -20,33 +39,31 @@ func IsExistingPrivilege(userHash, resName string, resId, resType, priType int) 
 	return true, nil
 }
 
-func CreatePrivilege(userHash, resName string, resId, resType, userId, priType, resVisibility int) error {
+func CreatePrivilege(conn *sql.Tx, userHash, resName string, resId, resType, userId, priType, resVisibility int) error {
 	var sql = "insert into privilege(resource_id, resource_name, resource_type, resource_visibility, user_id, user_hash, privilege_type) values (?, ?, ?, ?, ?, ?, ?)"
-	_, err := DB.Exec(sql, resId, resName, resType, resVisibility, userId, userHash, priType)
+	_, err := conn.Exec(sql, resId, resName, resType, resVisibility, userId, userHash, priType)
 	if err != nil {
-		seelog.Critical(err.Error())
 		return err
 	}
 	return nil
 }
 
-func AddWithCheck(userHash, resName string, resId, resType, userId, priType, resVisibility int) error {
-	flag, err := IsExistingPrivilege(userHash, resName, resId, resType, priType)
+func AddWithCheck(conn *sql.Tx, userHash, resName string, resId, resType, userId, priType, resVisibility int) error {
+	flag, err := IsExistingPrivilege(conn, userHash, resName, resId, resType, priType)
 	if err != nil {
-		seelog.Critical(err.Error())
 		return err
 	}
 	if flag {
 		return nil
 	}
-	err = CreatePrivilege(userHash, resName, resId, resType, userId, priType, resVisibility)
+	err = CreatePrivilege(conn, userHash, resName, resId, resType, userId, priType, resVisibility)
 	return err
 }
 
-func ValidateForUserModifyOrg(userHash string, orgId int) (bool, error) {
+func ValidateForUserModifyOrg(conn *sql.Tx, userHash string, orgId int) (bool, error) {
 	var privilege model.Privilege
 	sql := "select id, privilege_type from privilege where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, userHash, orgId, basic.Resource_Type_ORG).Scan(&privilege.Id, &privilege.PrivilegeType)
+	err := conn.QueryRow(sql, userHash, orgId, basic.Resource_Type_ORG).Scan(&privilege.Id, &privilege.PrivilegeType)
 	if err != nil {
 		return false, nil
 	}
@@ -57,10 +74,10 @@ func ValidateForUserModifyOrg(userHash string, orgId int) (bool, error) {
 	}
 }
 
-func ValidateForUserViewOrg(userHash string, orgId int) (bool, error) {
+func ValidateForUserViewOrg(conn *sql.Tx, userHash string, orgId int) (bool, error) {
 	var privilege model.Privilege
 	sql := "select id, privilege_type from privilege where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, userHash, orgId, basic.Resource_Type_ORG).Scan(&privilege.Id, &privilege.PrivilegeType)
+	err := conn.QueryRow(sql, userHash, orgId, basic.Resource_Type_ORG).Scan(&privilege.Id, &privilege.PrivilegeType)
 	if err != nil {
 		return false, err
 	}
@@ -71,96 +88,91 @@ func ValidateForUserViewOrg(userHash string, orgId int) (bool, error) {
 	}
 }
 
-func DeletePrivilege(resId, resType int) error {
+func DeletePrivilege(conn *sql.Tx, resId, resType int) error {
 	sql := "update privilege set is_deleted = 1 where resource_id = ? and resource_type = ? and is_deleted = 0"
-	_, err := DB.Exec(sql, resId, resType)
+	_, err := conn.Exec(sql, resId, resType)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func ListPrivilege(userHash string) (*[]model.Privilege, error) {
-	var privileges []model.Privilege
+func ListPrivilege(conn *sql.Tx, userHash string) (*[]model.Privilege, error) {
 	sql := "select * from privilege where user_hash  = ? and resource_type in (?, ?, ?) and privilege_type in (?, ?) and is_deleted = 0"
-	err := DB.Select(&privileges, sql, userHash, basic.Resource_Type_ORG, basic.Resource_Type_PROJECT, basic.Resource_Type_ITEM,
+	privileges, err := queryPrivilege(conn, sql, userHash, basic.Resource_Type_ORG, basic.Resource_Type_PROJECT, basic.Resource_Type_ITEM,
 		basic.Privilege_Type_MODIFIER, basic.Privilege_Type_VIEWER)
 	if err != nil {
 		return nil, err
 	}
-	return &privileges, nil
+	return privileges, nil
 }
 
-func ListPrivilegeByResource(resId, resType int) (*[]model.Privilege, error) {
-	var privileges []model.Privilege
+func ListPrivilegeByResource(conn *sql.Tx, resId, resType int) (*[]model.Privilege, error) {
 	sql := "select * from privilege where resource_id = ? and resource_type = ? and is_deleted = 0"
-	err := DB.Select(&privileges, sql, resId, resType)
+	privileges, err := queryPrivilege(conn, sql, resId, resType)
 	if err != nil {
 		return nil, err
 	}
-	return &privileges, nil
+	return privileges, nil
 }
 
-func ListPrivilegeByPrefixResourceName(name, userHash string) (*[]model.Privilege, error) {
-	var privileges []model.Privilege
+func ListPrivilegeByPrefixResourceName(conn *sql.Tx, name, userHash string) (*[]model.Privilege, error) {
 	sql := "select * from privilege where user_hash = ? and resource_name like '?%' and is_deleted = 0"
-	err := DB.Select(&privileges, sql, userHash, name)
+	privileges, err := queryPrivilege(conn, sql, userHash, name)
 	if err != nil {
 		return nil, err
 	}
-	return &privileges, nil
+	return privileges, nil
 }
 
-func QueryPrivilegeByUserHash(userHash string, resId, resType int) (*model.Privilege, error) {
-	var privileges []model.Privilege
+func QueryPrivilegeByUserHash(conn *sql.Tx, userHash string, resId, resType int) (*model.Privilege, error) {
 	sql := "select * from privilege where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
-	err := DB.Select(&privileges, sql, userHash, resId, resType)
+	privileges, err := queryPrivilege(conn, sql, userHash, resId, resType)
 	if err != nil {
 		return nil, err
 	}
-	if len(privileges) > 0 {
-		return &privileges[0], nil
+	if len(*privileges) > 0 {
+		return &(*privileges)[0], nil
 	}
 	return nil, nil
 }
 
-func UpdatePrivilegeByUserHash(userHash string, priType, resId, resType int) error {
+func UpdatePrivilegeByUserHash(conn *sql.Tx, userHash string, priType, resId, resType int) error {
 	sql := "update privilege set privilege_type = ? where user_hash = ? and resource_id = ? and resource_type = ?"
-	_, err := DB.Exec(sql, priType, userHash, resId, resType)
+	_, err := conn.Exec(sql, priType, userHash, resId, resType)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func DeletePrivilegeByUserHash(userHash string, resId, resType int) error {
+func DeletePrivilegeByUserHash(conn *sql.Tx, userHash string, resId, resType int) error {
 	sql := "update privilege set is_deleted = 1 where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
-	_, err := DB.Exec(sql, userHash, resId, resType)
+	_, err := conn.Exec(sql, userHash, resId, resType)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func ValidateUserForProjectCreation(userHash string, orgId int) (bool, error) {
-	flag, err := ValidateForUserViewOrg(userHash, orgId)
+func ValidateUserForProjectCreation(conn *sql.Tx, userHash string, orgId int) (bool, error) {
+	flag, err := ValidateForUserViewOrg(conn, userHash, orgId)
 	if err != nil {
 		return false, err
 	}
 	return flag, nil
 }
 
-func ValidateForUserModifyProject(userHash string, projectId, orgId int) (bool, error) {
-	var privileges []model.Privilege
+func ValidateForUserModifyProject(conn *sql.Tx, userHash string, projectId, orgId int) (bool, error) {
 	sql := "select * from privilege where user_hash = ? and resource_id = ? and resource_type = ? and is_deleted = 0"
-	err := DB.Select(&privileges, sql, userHash, projectId, basic.Resource_Type_PROJECT)
+	privileges, err := queryPrivilege(conn, sql, userHash, projectId, basic.Resource_Type_PROJECT)
 	if err != nil {
 		return false, err
 	}
-	if len(privileges) > 0 {
+	if len(*privileges) > 0 {
 		return true, nil
 	}
-	flag, err := ValidateForUserModifyOrg(userHash, orgId)
+	flag, err := ValidateForUserModifyOrg(conn, userHash, orgId)
 	if err != nil {
 		return false, err
 	}

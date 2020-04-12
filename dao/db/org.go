@@ -1,16 +1,17 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/cihub/seelog"
 	"strings"
 	"zoe/model"
 )
 
-func getOrgById(id int) (*model.Org, error) {
+func getOrgById(conn *sql.Tx, id int) (*model.Org, error) {
 	var org model.Org
 	sql := "select * from org where id = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, id).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
+	err := conn.QueryRow(sql, id).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -21,10 +22,10 @@ func getOrgById(id int) (*model.Org, error) {
 	return &org, nil
 }
 
-func getOrgByName(name string) (*model.Org, error) {
+func getOrgByName(conn *sql.Tx, name string) (*model.Org, error) {
 	var org model.Org
 	sql := "select * from org where name = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, name).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
+	err := conn.QueryRow(sql, name).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -35,16 +36,16 @@ func getOrgByName(name string) (*model.Org, error) {
 	return &org, nil
 }
 
-func QueryOrgById(id int) (*model.Org, error) {
-	org, err := getOrgById(id)
+func QueryOrgById(conn *sql.Tx, id int) (*model.Org, error) {
+	org, err := getOrgById(conn, id)
 	if err != nil {
 		return nil, err
 	}
 	return org, nil
 }
 
-func IsExistingOrgByName(name string) (bool, error) {
-	org, err := getOrgByName(name)
+func IsExistingOrgByName(conn *sql.Tx, name string) (bool, error) {
+	org, err := getOrgByName(conn, name)
 	if err != nil {
 		return false, err
 	}
@@ -54,8 +55,8 @@ func IsExistingOrgByName(name string) (bool, error) {
 	return false, nil
 }
 
-func IsExistingOrgById(id int) (bool, error) {
-	org, err := getOrgById(id)
+func IsExistingOrgById(conn *sql.Tx, id int) (bool, error) {
+	org, err := getOrgById(conn, id)
 	if err != nil {
 		return false, err
 	}
@@ -65,53 +66,47 @@ func IsExistingOrgById(id int) (bool, error) {
 	return false, nil
 }
 
-func CreateOrg(name string, private bool) (*model.Org, error) {
-	visibility := 0
-	if private {
-		visibility = 1
-	}
+func CreateOrg(conn *sql.Tx, name string, visibility int) (int, error) {
 	sql := "insert into org(name, visibility) values(?, ?)"
-	r, err := DB.Exec(sql, name, visibility)
+	r, err := conn.Exec(sql, name, visibility)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	id, err := r.LastInsertId()
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	fmt.Println("insert success: ", id)
-	org, err := getOrgById(int(id))
-	if err != nil {
-		return nil, err
-	}
-	return org, nil
+	return int(id), nil
 }
 
-func UpdateOrg(orgId int, private bool) error {
+func UpdateOrg(conn *sql.Tx, orgId int, private bool) error {
 	visibility := 0
 	if private {
 		visibility = 1
 	}
 	sql := "update org set visibility = ? where id = ? and is_deleted = 0"
-	_, err := DB.Exec(sql, visibility, orgId)
+	_, err := conn.Exec(sql, visibility, orgId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func DeleteOrg(orgId int) error {
+func DeleteOrg(conn *sql.Tx, orgId int) error {
 	// todo 删除组织的所有project和item
 	sql := "update org set is_deleted = 1 where id = ?"
-	_, err := DB.Exec(sql, orgId)
+	_, err := conn.Exec(sql, orgId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func ListOrg(orgNames *[]string) (*[]model.Org, error) {
+func ListOrg(conn *sql.Tx, orgNames *[]string) (*[]model.Org, error) {
 	var orgs []model.Org
 	cnt := len(*orgNames)
+	if cnt == 0 {
+		return &orgs, nil
+	}
 	sqlItems := make([]string, cnt)
 	for index := range sqlItems {
 		sqlItems[index] = "?"
@@ -122,19 +117,18 @@ func ListOrg(orgNames *[]string) (*[]model.Org, error) {
 	for index := range params {
 		params[index] = (*orgNames)[index]
 	}
-	err := DB.Select(&orgs, sql, params...)
+	var org model.Org
+	rows, err := conn.Query(sql, params...)
 	if err != nil {
+		_ = seelog.Critical(err)
 		return nil, err
+	}
+	for rows.Next() {
+		err = rows.Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
+		if err != nil {
+			return nil, err
+		}
+		orgs = append(orgs, org)
 	}
 	return &orgs, nil
-}
-
-func ListAllProject(orgId int) (*[]model.Project, error) {
-	var projects []model.Project
-	sql := "select * from project where parent_id = ? and is_deleted = 0"
-	err := DB.Select(&projects, sql, orgId)
-	if err != nil {
-		return nil, err
-	}
-	return &projects, nil
 }

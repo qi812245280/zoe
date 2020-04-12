@@ -1,37 +1,38 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
-	"github.com/cihub/seelog"
 	"strings"
 	"zoe/model"
 )
 
-func GetUserByUserHash(userHash string) (*model.User, error) {
+func GetUserByUserHash(conn *sql.Tx, userHash string) (*model.User, error) {
 	var user model.User
 	sql := "select * from user where user_hash = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, userHash).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
+	err := conn.QueryRow(sql, userHash).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
 	if err != nil {
-		seelog.Info(err.Error())
 		return nil, err
 	}
 	return &user, nil
 }
 
-func GetUserByUserId(userId int) (*model.User, error) {
+func GetUserByUserId(conn *sql.Tx, userId int) (*model.User, error) {
 	var user model.User
 	sql := "select * from user where id = ? and is_deleted = 0"
-	err := DB.QueryRow(sql, userId).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
+	err := conn.QueryRow(sql, userId).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
 	if err != nil {
-		seelog.Info(err.Error())
 		return nil, err
 	}
 	return &user, nil
 }
 
-func ListUserByIds(ids []int) (*[]model.User, error) {
+func ListUserByIds(conn *sql.Tx, ids []int) (*[]model.User, error) {
 	var users []model.User
 	cnt := len(ids)
+	if cnt == 0 {
+		return &users, nil
+	}
 	sqlItems := make([]string, cnt)
 	for index := range sqlItems {
 		sqlItems[index] = "?"
@@ -42,9 +43,17 @@ func ListUserByIds(ids []int) (*[]model.User, error) {
 	for index := range params {
 		params[index] = (ids)[index]
 	}
-	err := DB.Select(&users, sql, params...)
+	var user model.User
+	rows, err := conn.Query(sql, params...)
 	if err != nil {
 		return nil, err
+	}
+	for rows.Next() {
+		err = rows.Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, user)
 	}
 	return &users, nil
 }

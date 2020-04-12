@@ -23,6 +23,7 @@ func CreateOrgHandler(c *gin.Context) {
 	}
 	result, err := service.CreateOrg(userHash, req)
 	if err != nil {
+		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
@@ -44,6 +45,7 @@ func UpdateOrgHandler(c *gin.Context) {
 	orgId, _ := strconv.Atoi(c.Param("org_id"))
 	result, err := service.UpdateOrg(userHash, orgId, req)
 	if err != nil {
+		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
@@ -59,7 +61,8 @@ func DeleteOrgHandler(c *gin.Context) {
 	orgId, _ := strconv.Atoi(c.Param("org_id"))
 	result, err := service.DeleteOrg(userHash, orgId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err})
+		_ = seelog.Critical(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -73,7 +76,8 @@ func ListOrgHandler(c *gin.Context) {
 	}
 	result, err := service.ListOrg(userHash)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err})
+		_ = seelog.Critical(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -88,7 +92,8 @@ func SingleOrgHandler(c *gin.Context) {
 	orgId, _ := strconv.Atoi(c.Param("org_id"))
 	result, err := service.SingleOrg(userHash, orgId)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err})
+		_ = seelog.Critical(err.Error())
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, result)
@@ -109,6 +114,7 @@ func AuthorizeOrgHandler(c *gin.Context) {
 	}
 	result, err := service.AuthorizeOrg(userHash, orgId, req)
 	if err != nil {
+		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
@@ -125,6 +131,7 @@ func DeleteAuthorizeOrgHandler(c *gin.Context) {
 	userId, _ := strconv.Atoi(c.Param("user_id"))
 	result, err := service.DeleteAuthorizeOrg(userHash, orgId, userId)
 	if err != nil {
+		_ = seelog.Critical(err.Error())
 		c.JSON(http.StatusForbidden, gin.H{"code": -1, "msg": err.Error()})
 		return
 	}
