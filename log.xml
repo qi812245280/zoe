@@ -1,0 +1,15 @@
+<!-- https://github.com/cihub/seelog/wiki -->
+<seelog minlevel="info" type="sync">
+  <outputs formatid="main">
+
+    <console />
+
+    <!--
+    <rollingfile formatid="main" type="size" filename="guldan_log/guldan.log" maxsize="104857600" maxrolls="10" />
+    -->
+  </outputs>
+  <formats>
+    <format id="main" format="%Date %Time [%File:%Line] [%LEVEL] %Msg%n"/>
+  </formats>
+</seelog>
+

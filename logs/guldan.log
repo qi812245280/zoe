@@ -1,0 +1,12 @@
+2020-03-25 23:09:04 [main.go:108] [INFO] Listening and serving HTTP on 0.0.0.0:8383
+2020-03-25 23:09:06 [main.go:54] [INFO] [GIN] "GET /api/v1/info" 200 127.0.0.1 82us
+2020-03-25 23:09:31 [main.go:109] [INFO] Listening and serving HTTP on 0.0.0.0:8383
+2020-03-25 23:09:32 [main.go:55] [INFO] [GIN] "GET /api/v1/info" 500 127.0.0.1 975us
+2020-03-25 23:10:38 [main.go:109] [INFO] Listening and serving HTTP on 0.0.0.0:8383
+2020-03-25 23:10:40 [main.go:23] [INFO] 0x990200
+2020-03-25 23:10:40 [main.go:55] [INFO] [GIN] "GET /api/v1/info" 200 127.0.0.1 151us
+2020-03-25 23:11:34 [main.go:109] [INFO] Listening and serving HTTP on 0.0.0.0:8383
+2020-03-25 23:11:35 [main.go:23] [INFO] []
+2020-03-25 23:11:35 [main.go:55] [INFO] [GIN] "GET /api/v1/info" 200 127.0.0.1 122us
+2020-03-25 23:11:41 [main.go:23] [INFO] []
+2020-03-25 23:11:41 [main.go:55] [INFO] [GIN] "GET /api/v1/info" 200 127.0.0.1 102us
