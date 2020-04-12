@@ -21,6 +21,6 @@ func InitMysql(c *config.Config) error {
 
 func Destroy() {
 	if DB != nil {
-		DB.Close()
+		_ = DB.Close()
 	}
 }

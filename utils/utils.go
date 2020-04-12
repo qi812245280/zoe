@@ -1,13 +1,14 @@
 package utils
 
 import (
+	"database/sql"
 	"github.com/gin-gonic/gin"
 	"zoe/dao/db"
 	"zoe/model"
 )
 
-func GetUser(userHash string) (*model.User, error) {
-	user, err := db.GetUserByUserHash(userHash)
+func GetUser(conn *sql.Tx, userHash string) (*model.User, error) {
+	user, err := db.GetUserByUserHash(conn, userHash)
 	if err != nil {
 		return nil, err
 	}
