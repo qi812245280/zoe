@@ -1,24 +1,16 @@
-package controller
+package db
 
 import (
 	"fmt"
 	"github.com/cihub/seelog"
-	"zoe/model"
-	"zoe/mw"
 	"strings"
+	"zoe/model"
 )
 
-type OrgControllerEngine struct {
-}
-
-func NewOrgControllerEngine() (*OrgControllerEngine, error) {
-	return &OrgControllerEngine{}, nil
-}
-
-func (this *OrgControllerEngine) getOrgById(id int) (*model.Org, error) {
+func getOrgById(id int) (*model.Org, error) {
 	var org model.Org
 	sql := "select * from org where id = ? and is_deleted = 0"
-	err := mw.DB.QueryRow(sql, id).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
+	err := DB.QueryRow(sql, id).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -29,10 +21,10 @@ func (this *OrgControllerEngine) getOrgById(id int) (*model.Org, error) {
 	return &org, nil
 }
 
-func (this *OrgControllerEngine) getOrgByName(name string) (*model.Org, error) {
+func getOrgByName(name string) (*model.Org, error) {
 	var org model.Org
 	sql := "select * from org where name = ? and is_deleted = 0"
-	err := mw.DB.QueryRow(sql, name).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
+	err := DB.QueryRow(sql, name).Scan(&org.Id, &org.Name, &org.Visibility, &org.CurrentVersionId, &org.IsDeleted, &org.UpdatedAt, &org.CreateAt)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
 			return nil, nil
@@ -43,16 +35,16 @@ func (this *OrgControllerEngine) getOrgByName(name string) (*model.Org, error) {
 	return &org, nil
 }
 
-func (this *OrgControllerEngine) QueryOrgById(id int) (*model.Org, error) {
-	org, err := this.getOrgById(id)
+func QueryOrgById(id int) (*model.Org, error) {
+	org, err := getOrgById(id)
 	if err != nil {
 		return nil, err
 	}
 	return org, nil
 }
 
-func (this *OrgControllerEngine) IsExistingOrgByName(name string) (bool, error) {
-	org, err := this.getOrgByName(name)
+func IsExistingOrgByName(name string) (bool, error) {
+	org, err := getOrgByName(name)
 	if err != nil {
 		return false, err
 	}
@@ -62,8 +54,8 @@ func (this *OrgControllerEngine) IsExistingOrgByName(name string) (bool, error) 
 	return false, nil
 }
 
-func (this *OrgControllerEngine) IsExistingOrgById(id int) (bool, error) {
-	org, err := this.getOrgById(id)
+func IsExistingOrgById(id int) (bool, error) {
+	org, err := getOrgById(id)
 	if err != nil {
 		return false, err
 	}
@@ -73,13 +65,13 @@ func (this *OrgControllerEngine) IsExistingOrgById(id int) (bool, error) {
 	return false, nil
 }
 
-func (this *OrgControllerEngine) CreateOrg(name string, private bool) (*model.Org, error) {
+func CreateOrg(name string, private bool) (*model.Org, error) {
 	visibility := 0
 	if private {
 		visibility = 1
 	}
 	sql := "insert into org(name, visibility) values(?, ?)"
-	r, err := mw.DB.Exec(sql, name, visibility)
+	r, err := DB.Exec(sql, name, visibility)
 	if err != nil {
 		return nil, err
 	}
@@ -88,36 +80,36 @@ func (this *OrgControllerEngine) CreateOrg(name string, private bool) (*model.Or
 		return nil, err
 	}
 	fmt.Println("insert success: ", id)
-	org, err := this.getOrgById(int(id))
+	org, err := getOrgById(int(id))
 	if err != nil {
 		return nil, err
 	}
 	return org, nil
 }
 
-func (this *OrgControllerEngine) UpdateOrg(orgId int, private bool) error {
+func UpdateOrg(orgId int, private bool) error {
 	visibility := 0
 	if private {
 		visibility = 1
 	}
 	sql := "update org set visibility = ? where id = ? and is_deleted = 0"
-	_, err := mw.DB.Exec(sql, visibility, orgId)
+	_, err := DB.Exec(sql, visibility, orgId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (this *OrgControllerEngine) DeleteOrg(orgId int) error {
+func DeleteOrg(orgId int) error {
 	// todo 删除组织的所有project和item
 	sql := "update org set is_deleted = 1 where id = ?"
-	_, err := mw.DB.Exec(sql, orgId)
+	_, err := DB.Exec(sql, orgId)
 	if err != nil {
 		return err
 	}
 	return nil
 }
-func (this *OrgControllerEngine) ListOrg(orgNames *[]string) (*[]model.Org, error) {
+func ListOrg(orgNames *[]string) (*[]model.Org, error) {
 	var orgs []model.Org
 	cnt := len(*orgNames)
 	sqlItems := make([]string, cnt)
@@ -130,17 +122,17 @@ func (this *OrgControllerEngine) ListOrg(orgNames *[]string) (*[]model.Org, erro
 	for index := range params {
 		params[index] = (*orgNames)[index]
 	}
-	err := mw.DB.Select(&orgs, sql, params...)
+	err := DB.Select(&orgs, sql, params...)
 	if err != nil {
 		return nil, err
 	}
 	return &orgs, nil
 }
 
-func (this *OrgControllerEngine) ListAllProject(orgId int) (*[]model.Project, error) {
+func ListAllProject(orgId int) (*[]model.Project, error) {
 	var projects []model.Project
 	sql := "select * from project where parent_id = ? and is_deleted = 0"
-	err := mw.DB.Select(&projects, sql, orgId)
+	err := DB.Select(&projects, sql, orgId)
 	if err != nil {
 		return nil, err
 	}

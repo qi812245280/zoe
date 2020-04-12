@@ -5,7 +5,7 @@ import "time"
 type Project struct {
 	Id               int       `db:"id"`
 	Name             string    `db:"name"`
-	ParentId         string    `db:"parent_id"`
+	ParentId         int       `db:"parent_id"`
 	Visibility       int       `db:"visibility"`
 	CurrentVersionId int       `db:"current_version_id"`
 	IsDeleted        int       `db:"is_deleted"`

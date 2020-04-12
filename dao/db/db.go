@@ -1,4 +1,4 @@
-package mw
+package db
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 var DB *sqlx.DB
 
 func InitMysql(c *config.Config) error {
-	database, err := sqlx.Open("mysql", "root:root@tcp(127.0.0.1:3306)/guldandb?charset=utf8&parseTime=true")
+	database, err := sqlx.Open("mysql", c.Database.ConnectionString)
 	if err != nil {
 		fmt.Println("init mysql error: ", err)
 		return err

@@ -1,23 +1,15 @@
-package controller
+package db
 
 import (
 	"errors"
 	"github.com/cihub/seelog"
 	"zoe/model"
-	"zoe/mw"
 )
 
-type ProjectControllerEngine struct {
-}
-
-func NewProjectControllerEngine() (*ProjectControllerEngine, error) {
-	return &ProjectControllerEngine{}, nil
-}
-
-func (this *ProjectControllerEngine) GetProjectById(id int) (*model.Project, error) {
+func GetProjectById(id int) (*model.Project, error) {
 	var projects []model.Project
 	sql := "select * from project where id = ? and is_deleted = 0"
-	err := mw.DB.Select(&projects, sql, id)
+	err := DB.Select(&projects, sql, id)
 	if err != nil {
 		return nil, err
 	}
@@ -27,10 +19,10 @@ func (this *ProjectControllerEngine) GetProjectById(id int) (*model.Project, err
 	return nil, nil
 }
 
-func (this *ProjectControllerEngine) GetProjectByParentIdAndName(parentId int, name string) (*model.Project, error) {
+func GetProjectByParentIdAndName(parentId int, name string) (*model.Project, error) {
 	var projects []model.Project
 	sql := "select * from project where name = ? and parent_id = ? and is_deleted = 0"
-	err := mw.DB.Select(&projects, sql, name, parentId)
+	err := DB.Select(&projects, sql, name, parentId)
 	if err != nil {
 		return nil, err
 	}
@@ -40,18 +32,18 @@ func (this *ProjectControllerEngine) GetProjectByParentIdAndName(parentId int, n
 	return nil, nil
 }
 
-func (this *ProjectControllerEngine) ListProject(orgId int) (*[]model.Project, error) {
+func ListProject(orgId int) (*[]model.Project, error) {
 	var projects []model.Project
 	sql := "select * from project where parent_id = ? and is_deleted = 0"
-	err := mw.DB.Select(&projects, sql, orgId)
+	err := DB.Select(&projects, sql, orgId)
 	if err != nil {
 		return nil, err
 	}
 	return &projects, nil
 }
 
-func (this *ProjectControllerEngine) ListProjectByVisibility(orgId int) (*[]model.Project, *[]model.Project, error) {
-	projects, err := this.ListProject(orgId)
+func ListProjectByVisibility(orgId int) (*[]model.Project, *[]model.Project, error) {
+	projects, err := ListProject(orgId)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -69,8 +61,8 @@ func (this *ProjectControllerEngine) ListProjectByVisibility(orgId int) (*[]mode
 	return &publicProjects, &privateProjects, nil
 }
 
-func (this *ProjectControllerEngine) CreateProject(name, private string, parentId int) (*model.Project, error) {
-	project, err := this.GetProjectByParentIdAndName(parentId, name)
+func CreateProject(name, private string, parentId int) (*model.Project, error) {
+	project, err := GetProjectByParentIdAndName(parentId, name)
 	if err != nil {
 		return nil, err
 	}
@@ -84,7 +76,7 @@ func (this *ProjectControllerEngine) CreateProject(name, private string, parentI
 		visibility = 1
 	}
 	sql := "insert into project (name, parent_id, visibility) values(?, ?, ?)"
-	r, err := mw.DB.Exec(sql, name, parentId, visibility)
+	r, err := DB.Exec(sql, name, parentId, visibility)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +84,14 @@ func (this *ProjectControllerEngine) CreateProject(name, private string, parentI
 	if err != nil {
 		return nil, err
 	}
-	project, err = this.GetProjectById(int(id))
+	project, err = GetProjectById(int(id))
 	if err != nil {
 		return nil, err
 	}
 	return project, nil
 }
 
-func (this *ProjectControllerEngine) UpdateProject(projectId int, private string) error {
+func UpdateProject(projectId int, private string) error {
 	var visibility int
 	if private == "true" {
 		visibility = 0
@@ -107,7 +99,7 @@ func (this *ProjectControllerEngine) UpdateProject(projectId int, private string
 		visibility = 1
 	}
 	sql := "update project set visibility = ? where id = ? and is_deleted = 0"
-	_, err := mw.DB.Exec(sql, visibility, projectId)
+	_, err := DB.Exec(sql, visibility, projectId)
 	if err != nil {
 		return err
 	}

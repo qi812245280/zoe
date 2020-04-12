@@ -1,24 +1,16 @@
-package controller
+package db
 
 import (
 	"fmt"
 	"github.com/cihub/seelog"
 	"strings"
 	"zoe/model"
-	"zoe/mw"
 )
 
-type UserControllerEngine struct {
-}
-
-func NewUserControllerEngine() (*UserControllerEngine, error) {
-	return &UserControllerEngine{}, nil
-}
-
-func (this *UserControllerEngine) GetUserByUserHash(userHash string) (*model.User, error) {
+func GetUserByUserHash(userHash string) (*model.User, error) {
 	var user model.User
 	sql := "select * from user where user_hash = ? and is_deleted = 0"
-	err := mw.DB.QueryRow(sql, userHash).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
+	err := DB.QueryRow(sql, userHash).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
 	if err != nil {
 		seelog.Info(err.Error())
 		return nil, err
@@ -26,10 +18,10 @@ func (this *UserControllerEngine) GetUserByUserHash(userHash string) (*model.Use
 	return &user, nil
 }
 
-func (this *UserControllerEngine) GetUserByUserId(userId int) (*model.User, error) {
+func GetUserByUserId(userId int) (*model.User, error) {
 	var user model.User
 	sql := "select * from user where id = ? and is_deleted = 0"
-	err := mw.DB.QueryRow(sql, userId).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
+	err := DB.QueryRow(sql, userId).Scan(&user.Id, &user.Name, &user.UserHash, &user.SecretHash, &user.IsDeleted, &user.UpdatedAt, &user.CreateAt)
 	if err != nil {
 		seelog.Info(err.Error())
 		return nil, err
@@ -37,7 +29,7 @@ func (this *UserControllerEngine) GetUserByUserId(userId int) (*model.User, erro
 	return &user, nil
 }
 
-func (this *UserControllerEngine) ListUserByIds(ids []int) (*[]model.User, error) {
+func ListUserByIds(ids []int) (*[]model.User, error) {
 	var users []model.User
 	cnt := len(ids)
 	sqlItems := make([]string, cnt)
@@ -50,7 +42,7 @@ func (this *UserControllerEngine) ListUserByIds(ids []int) (*[]model.User, error
 	for index := range params {
 		params[index] = (ids)[index]
 	}
-	err := mw.DB.Select(&users, sql, params...)
+	err := DB.Select(&users, sql, params...)
 	if err != nil {
 		return nil, err
 	}

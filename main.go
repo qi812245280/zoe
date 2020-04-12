@@ -11,9 +11,7 @@ import (
 	"time"
 	"zoe/config"
 	"zoe/controller"
-	"zoe/mw"
-	org "zoe/router/org"
-	"zoe/router/project"
+	"zoe/dao/db"
 )
 
 var (
@@ -38,16 +36,16 @@ func applyRoute(r *gin.Engine) {
 	v1 := r.Group("/api")
 	v1.GET("/info", InfoHandler)
 
-	v1.POST("/org", org.CreateOrgHandler)
-	v1.PUT("/org/:org_id", org.UpdateOrgHandler)
-	v1.DELETE("/org/:org_id", org.DeleteOrgHandler)
-	v1.GET("/org", org.ListOrgHandler)
-	v1.GET("/org/:org_id", org.SingleOrgHandler)
-	v1.POST("/org/:org_id/authorize", org.AuthorizeOrgHandler)
-	v1.DELETE("/org/:org_id/authorize/:user_id", org.DeleteAuthorizeOrgHandler)
+	v1.POST("/org", controller.CreateOrgHandler)
+	v1.PUT("/org/:org_id", controller.UpdateOrgHandler)
+	v1.DELETE("/org/:org_id", controller.DeleteOrgHandler)
+	v1.GET("/org", controller.ListOrgHandler)
+	v1.GET("/org/:org_id", controller.SingleOrgHandler)
+	v1.POST("/org/:org_id/authorize", controller.AuthorizeOrgHandler)
+	v1.DELETE("/org/:org_id/authorize/:user_id", controller.DeleteAuthorizeOrgHandler)
 
-	v1.PUT("/project", project.CreateProjectHandler)
-	v1.POST("/project/:project_id", project.UpdateProjectHandler)
+	v1.PUT("/project", controller.CreateProjectHandler)
+	v1.POST("/project/:project_id", controller.UpdateProjectHandler)
 }
 
 func guldanAccessLogger() gin.HandlerFunc {
@@ -100,16 +98,11 @@ func main() {
 		_ = log.ReplaceLogger(logger)
 	}
 
-	if err := mw.InitMysql(config.C); err != nil {
+	if err := db.InitMysql(config.C); err != nil {
 		_ = log.Criticalf("new middleware fail: %v", err)
 		os.Exit(1)
 	}
-	defer mw.Destroy()
-
-	if err := controller.Initialize(); err != nil {
-		_ = log.Criticalf("new controller fail: %v", err)
-		os.Exit(1)
-	}
+	defer db.Destroy()
 
 	if config.C.Debug {
 		gin.SetMode(gin.DebugMode)
